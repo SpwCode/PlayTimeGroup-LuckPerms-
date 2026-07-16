@@ -1,5 +1,5 @@
-# Конфигурация ролей за время игры
-# Формат времени: 1h (часы), 30m (минуты), 300s (секунды)
+# Role configuration for play time
+# Time format: 1h (hours), 30m (minutes), 300s (seconds)
 roles:
   - role: "novice"
     time: "1m"

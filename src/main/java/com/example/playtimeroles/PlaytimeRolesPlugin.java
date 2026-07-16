@@ -32,71 +32,74 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Регистрация событий
+        // Register events
         getServer().getPluginManager().registerEvents(this, this);
 
-        // Получение LuckPerms API
+        // Get LuckPerms API
         try {
             luckPerms = LuckPermsProvider.get();
         } catch (IllegalStateException e) {
-            getLogger().severe("LuckPerms не найден! Плагин отключен.");
+            getLogger().severe("LuckPerms not found! Plugin disabled.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        // Загрузка конфига
+        // Load config
         saveDefaultConfig();
 
-        // Файл для хранения времени игры
+        // File for storing play time
         playtimeFile = new File(getDataFolder(), "playtime.yml");
         if (!playtimeFile.exists()) {
             try {
                 playtimeFile.createNewFile();
             } catch (IOException e) {
-                getLogger().severe("Не удалось создать файл playtime.yml: " + e.getMessage());
+                getLogger().severe("Failed to create playtime.yml file: " + e.getMessage());
             }
         }
         playtimeConfig = YamlConfiguration.loadConfiguration(playtimeFile);
 
-        // Загрузка данных о времени игры
+        // Load playtime data
         loadPlaytimeData();
 
-        // Регистрация команды
+        // Register command
         getCommand("playtime").setExecutor(new PlaytimeCommand(this));
 
-        // Планировщик для проверки ролей каждые 5 минут
+        // Scheduler to check roles every 5 minutes
         new BukkitRunnable() {
             @Override
             public void run() {
                 checkAndGrantRoles();
             }
-        }.runTaskTimer(this, 0L, 6000L); // 6000 ticks = 5 минут
+        }.runTaskTimer(this, 0L, 6000L); // 6000 ticks = 5 minutes
 
-        getLogger().info("PlaytimeRolesPlugin включен!");
+        getLogger().info("PlaytimeRolesPlugin enabled!");
     }
 
     @Override
     public void onDisable() {
-        // Сохранить время для онлайн игроков перед отключением
+        // Save playtime for online players before disabling
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uuid = player.getUniqueId();
             if (playerJoinTimes.containsKey(uuid)) {
                 long joinTime = playerJoinTimes.get(uuid);
                 long playtime = System.currentTimeMillis() - joinTime;
+                
                 long totalPlaytime = getTotalPlaytime(uuid) + playtime;
                 setTotalPlaytime(uuid, totalPlaytime);
             }
         }
-        // Сохранение данных
+
+        // Save data
         savePlaytimeData();
-        getLogger().info("PlaytimeRolesPlugin отключен!");
+        getLogger().info("PlaytimeRolesPlugin disabled!");
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         playerJoinTimes.put(player.getUniqueId(), System.currentTimeMillis());
-        // Проверка ролей при входе
+
+        // Check roles on join
         checkAndGrantRolesForPlayer(player);
     }
 
@@ -107,8 +110,10 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
         if (playerJoinTimes.containsKey(uuid)) {
             long joinTime = playerJoinTimes.get(uuid);
             long playtime = System.currentTimeMillis() - joinTime;
+
             long totalPlaytime = getTotalPlaytime(uuid) + playtime;
             setTotalPlaytime(uuid, totalPlaytime);
+
             playerJoinTimes.remove(uuid);
         }
     }
@@ -126,14 +131,14 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private void loadPlaytimeData() {
-        // Данные загружаются при загрузке конфига
+        // Data is loaded when config loads
     }
 
     private void savePlaytimeData() {
         try {
             playtimeConfig.save(playtimeFile);
         } catch (IOException e) {
-            getLogger().severe("Не удалось сохранить playtime.yml: " + e.getMessage());
+            getLogger().severe("Failed to save playtime.yml: " + e.getMessage());
         }
     }
 
@@ -149,12 +154,13 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
 
         UUID uuid = player.getUniqueId();
         long totalPlaytime = getTotalPlaytime(uuid);
-        getLogger().info("Игрок " + player.getName() + " общее время: " + formatPlaytime(totalPlaytime));
+
+        getLogger().info("Player " + player.getName() + " total time: " + formatPlaytime(totalPlaytime));
 
         for (Map<?, ?> roleMap : roles) {
             String role = (String) roleMap.get("role");
             long requiredTime = parseTime((String) roleMap.get("time"));
-            getLogger().info("Проверка роли " + role + " требуется: " + formatPlaytime(requiredTime));
+            getLogger().info("Checking role " + role + " required: " + formatPlaytime(requiredTime));
 
             if (totalPlaytime >= requiredTime) {
                 grantRole(uuid, role);
@@ -163,7 +169,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private long parseTime(String timeStr) {
-        // Парсинг времени, например "1h" -> 3600000 ms
+        // Parse time, e.g. "1h" -> 3600000 ms
         if (timeStr.endsWith("h")) {
             return Long.parseLong(timeStr.substring(0, timeStr.length() - 1)) * 3600000L;
         } else if (timeStr.endsWith("m")) {
@@ -171,6 +177,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
         } else if (timeStr.endsWith("s")) {
             return Long.parseLong(timeStr.substring(0, timeStr.length() - 1)) * 1000L;
         }
+
         return 0L;
     }
 
@@ -181,7 +188,8 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
             if (!user.getNodes().contains(node)) {
                 user.data().add(node);
                 luckPerms.getUserManager().saveUser(user);
-                getLogger().info("Игроку " + uuid + " выдана роль " + role);
+
+                getLogger().info("Granted role " + role + " to player " + uuid);
             }
         }
     }
@@ -189,6 +197,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     public String formatPlaytime(long millis) {
         long hours = TimeUnit.MILLISECONDS.toHours(millis);
         long minutes = TimeUnit.MILLISECONDS.toMinutes(millis) % 60;
+
         long seconds = TimeUnit.MILLISECONDS.toSeconds(millis) % 60;
         return String.format("%dh %dm %ds", hours, minutes, seconds);
     }

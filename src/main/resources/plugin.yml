@@ -2,10 +2,10 @@ name: PlaytimeRoles
 version: 1.0.0
 main: com.example.playtimeroles.PlaytimeRolesPlugin
 api-version: 1.21
-depend: [LuckPerms]
+depend: [ LuckPerms ]
 
 commands:
   playtime:
-    description: Показать время игры
-    usage: /playtime [игрок]
+    description: Show play time
+    usage: /playtime [player]
     permission: playtimeroles.playtime

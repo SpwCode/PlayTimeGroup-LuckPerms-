@@ -19,7 +19,7 @@ public class PlaytimeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Эта команда только для игроков!");
+            sender.sendMessage("This command is only for players!");
             return true;
         }
 
@@ -27,22 +27,24 @@ public class PlaytimeCommand implements CommandExecutor {
         UUID uuid;
 
         if (args.length > 0) {
-            // Проверка на разрешение для просмотра чужого времени
+            // Check permission to view someone else's time
             if (!player.hasPermission("playtimeroles.admin")) {
-                player.sendMessage("У вас нет разрешения на просмотр времени других игроков!");
+                player.sendMessage("You don't have permission to view other players' time!");
                 return true;
             }
 
             Player target = Bukkit.getPlayer(args[0]);
             if (target == null) {
-                player.sendMessage("Игрок не найден!");
+                player.sendMessage("Player not found!");
                 return true;
             }
+
             uuid = target.getUniqueId();
-            player.sendMessage("Время игры " + target.getName() + ": " + plugin.formatPlaytime(plugin.getTotalPlaytime(uuid)));
+            player.sendMessage("Play time " + target.getName() + ": " + plugin.formatPlaytime(plugin.getTotalPlaytime(uuid)));
+            
         } else {
             uuid = player.getUniqueId();
-            player.sendMessage("Ваше время игры: " + plugin.formatPlaytime(plugin.getTotalPlaytime(uuid)));
+            player.sendMessage("Your play time: " + plugin.formatPlaytime(plugin.getTotalPlaytime(uuid)));
         }
 
         return true;

@@ -1,9 +1,0 @@
-# Конфигурация ролей за время игры
-# Формат времени: 1h (часы), 30m (минуты), 300s (секунды)
-roles:
-  - role: "novice"
-    time: "1m"
-  - role: "experienced"
-    time: "10h"
-  - role: "veteran"
-    time: "50h"
