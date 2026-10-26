@@ -1,7 +1,7 @@
 name: PlaytimeRoles
 version: 1.0.1
 main: com.example.playtimeroles.PlaytimeRolesPlugin
-api-version: 26.1.2
+api-version: 26.2
 depend: [ LuckPerms ]
 
 commands:
