@@ -1,9 +1,13 @@
 # Role configuration for play time
 # Time format: 1h (hours), 30m (minutes), 300s (seconds)
 roles:
-  - role: "novice"
-    time: "1m"
-  - role: "experienced"
-    time: "10h"
+  - role: "phantom"
+    time: "168h"      # 1 неделя -> Статус в табе/чате: [Призрак]
+  - role: "oldtimer"
+    time: "336h"      # 2 недели -> Статус в табе/чате: [Старожил]
   - role: "veteran"
-    time: "50h"
+    time: "504h"      # 3 недели -> Статус в табе/чате: [Ветеран]
+  - role: "elite"
+    time: "672h"      # 4 недели -> Статус в табе/чате: [Элита]
+  - role: "legend"
+    time: "1440h"     # 2 месяца -> Статус в табе/чате: [Легенда]
