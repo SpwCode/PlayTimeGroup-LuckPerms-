@@ -2,10 +2,12 @@ package com.example.playtimeroles;
 
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
-import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.Node;
 import org.bukkit.Bukkit;
 import org.bukkit.Statistic;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -18,7 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
+public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, CommandExecutor {
 
     private LuckPerms luckPerms;
 
@@ -35,9 +37,14 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
         }
 
         saveDefaultConfig();
+
+        // Регистрируем вашу старую команду /playtime
         getCommand("playtime").setExecutor(new PlaytimeCommand(this));
 
-        getLogger().info("PlaytimeRolesPlugin enabled! (Join-check only mode)");
+        // Регистрируем новую админскую команду /playtimeroles
+        getCommand("playtimeroles").setExecutor(this);
+
+        getLogger().info("PlaytimeRolesPlugin enabled! (Reload command added)");
     }
 
     @Override
@@ -45,9 +52,40 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
         getLogger().info("PlaytimeRolesPlugin disabled!");
     }
 
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("playtimeroles")) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+
+                // Проверка: выполнять может только консоль, OP или игрок с правами админа
+                if (!sender.isOp() && !sender.hasPermission("playtimeroles.admin")) {
+                    sender.sendMessage("§cУ вас нет прав для выполнения этой команды!");
+                    return true;
+                }
+
+                // 1. Перезагружаем конфигурационный файл с диска
+                reloadConfig();
+                sender.sendMessage("§a[PlaytimeRoles] Конфигурация успешно перезагружена!");
+
+                // 2. Асинхронно перепроверяем роли для ВСЕХ, кто сейчас на сервере онлайн
+                sender.sendMessage("§e[PlaytimeRoles] Синхронизация ролей для онлайн-игроков...");
+                Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        checkAndGrantRolesForPlayer(player);
+                    }
+                    sender.sendMessage("§a[PlaytimeRoles] Синхронизация всех онлайн-игроков завершена!");
+                });
+
+                return true;
+            }
+            sender.sendMessage("§cИспользуйте: /playtimeroles reload");
+            return true;
+        }
+        return false;
+    }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        // Проверка запускается асинхронно исключительно при входе игрока на сервер
         Player player = event.getPlayer();
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> checkAndGrantRolesForPlayer(player));
     }
@@ -55,7 +93,6 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     public long getTotalPlaytime(Player player) {
         if (player == null) return 0L;
 
-        // Безопасное чтение статистики сервера из асинхронного потока
         try {
             return Bukkit.getScheduler().callSyncMethod(this, () -> {
                 long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
@@ -81,6 +118,8 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
 
             if (totalPlaytime >= requiredTime) {
                 grantRole(uuid, role);
+            } else {
+                revokeRole(uuid, role);
             }
         }
     }
@@ -97,12 +136,21 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private void grantRole(UUID uuid, String role) {
-        // Потокобезопасное добавление роли через LuckPerms API
         luckPerms.getUserManager().modifyUser(uuid, user -> {
             Node node = Node.builder("group." + role).build();
             if (!user.getNodes().contains(node)) {
                 user.data().add(node);
-                getLogger().info("Granted role " + role + " to player " + uuid + " on join.");
+                getLogger().info("Granted role " + role + " to player " + uuid + " (Matches criteria)");
+            }
+        });
+    }
+
+    private void revokeRole(UUID uuid, String role) {
+        luckPerms.getUserManager().modifyUser(uuid, user -> {
+            Node node = Node.builder("group." + role).build();
+            if (user.getNodes().contains(node)) {
+                user.data().remove(node);
+                getLogger().info("Revoked role " + role + " from player " + uuid + " (Does not match criteria anymore)");
             }
         });
     }

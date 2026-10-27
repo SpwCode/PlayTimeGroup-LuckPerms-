@@ -6,6 +6,9 @@ depend: [ LuckPerms ]
 
 commands:
   playtime:
-    description: Show play time
-    usage: /playtime [player]
-    permission: playtimeroles.playtime
+    description: Посмотреть наигранное время.
+    usage: /playtime [игрок]
+  playtimeroles:
+    description: Управление плагином PlaytimeRoles.
+    usage: /playtimeroles reload
+    permission: playtimeroles.admin
