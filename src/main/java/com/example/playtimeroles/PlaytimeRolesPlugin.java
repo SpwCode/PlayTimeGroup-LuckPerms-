@@ -12,7 +12,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.List;
 import java.util.Map;
@@ -38,16 +37,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
         saveDefaultConfig();
         getCommand("playtime").setExecutor(new PlaytimeCommand(this));
 
-        // Безопасный асинхронный таймер (runTaskTimerAsynchronously)
-        // Теперь проверка не нагружает основной поток сервера!
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                checkAndGrantRoles();
-            }
-        }.runTaskTimerAsynchronously(this, 0L, 6000L); // 6000 тиков = 5 минут
-
-        getLogger().info("PlaytimeRolesPlugin enabled seamlessly!");
+        getLogger().info("PlaytimeRolesPlugin enabled! (Join-check only mode)");
     }
 
     @Override
@@ -57,7 +47,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        // Переносим проверку при входе в асинхронный поток, чтобы не фризить вход игрока
+        // Проверка запускается асинхронно исключительно при входе игрока на сервер
         Player player = event.getPlayer();
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> checkAndGrantRolesForPlayer(player));
     }
@@ -65,8 +55,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     public long getTotalPlaytime(Player player) {
         if (player == null) return 0L;
 
-        // Так как метод вызывается из асинхронного потока, Bukkit API может ругаться.
-        // Поэтому мы заставляем сервер безопасно прочитать статистику из основного потока.
+        // Безопасное чтение статистики сервера из асинхронного потока
         try {
             return Bukkit.getScheduler().callSyncMethod(this, () -> {
                 long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
@@ -74,12 +63,6 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
             }).get(1, TimeUnit.SECONDS);
         } catch (Exception e) {
             return 0L;
-        }
-    }
-
-    private void checkAndGrantRoles() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            checkAndGrantRolesForPlayer(player);
         }
     }
 
@@ -114,14 +97,14 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private void grantRole(UUID uuid, String role) {
-        // Загружаем пользователя асинхронно
+        // Потокобезопасное добавление роли через LuckPerms API
         luckPerms.getUserManager().modifyUser(uuid, user -> {
             Node node = Node.builder("group." + role).build();
             if (!user.getNodes().contains(node)) {
                 user.data().add(node);
-                getLogger().info("Granted role " + role + " to player " + uuid);
+                getLogger().info("Granted role " + role + " to player " + uuid + " on join.");
             }
-        }); // Метод modifyUser сам автоматически и асинхронно сохраняет изменения в БД
+        });
     }
 
     public String formatPlaytime(long millis) {
