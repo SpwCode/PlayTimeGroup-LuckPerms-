@@ -25,10 +25,8 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Регистрируем только вход игрока (выход больше не нужен)
         getServer().getPluginManager().registerEvents(this, this);
 
-        // Подключаем LuckPerms API
         try {
             luckPerms = LuckPermsProvider.get();
         } catch (IllegalStateException e) {
@@ -37,49 +35,46 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // Загружаем конфиг
         saveDefaultConfig();
-
-        // Регистрируем команду
         getCommand("playtime").setExecutor(new PlaytimeCommand(this));
 
-        // Проверка ролей каждые 5 минут
+        // Безопасный асинхронный таймер (runTaskTimerAsynchronously)
+        // Теперь проверка не нагружает основной поток сервера!
         new BukkitRunnable() {
             @Override
             public void run() {
                 checkAndGrantRoles();
             }
-        }.runTaskTimer(this, 0L, 6000L); // 6000 тиков = 5 минут
+        }.runTaskTimerAsynchronously(this, 0L, 6000L); // 6000 тиков = 5 минут
 
-        getLogger().info("PlaytimeRolesPlugin enabled using server statistics!");
+        getLogger().info("PlaytimeRolesPlugin enabled seamlessly!");
     }
 
     @Override
     public void onDisable() {
-        // Больше ничего сохранять не нужно, сервер сам пишет статистику в файлы игроков
         getLogger().info("PlaytimeRolesPlugin disabled!");
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        // Проверяем роль сразу при входе на основе его старой статистики
-        checkAndGrantRolesForPlayer(event.getPlayer());
+        // Переносим проверку при входе в асинхронный поток, чтобы не фризить вход игрока
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> checkAndGrantRolesForPlayer(player));
     }
 
-    /**
-     * Получает общее время игры онлайн-игрока напрямую из статистики сервера.
-     * Возвращает значение в МИЛЛИСЕКУНДАХ для совместимости с вашим старым кодом парсинга.
-     */
     public long getTotalPlaytime(Player player) {
         if (player == null) return 0L;
 
-        // В зависимости от версии Minecraft статистика называется по-разному:
-        // 1.13+ использует PLAY_ONE_MINUTE (хотя на самом деле измеряет в тиках)
-        // Если у вас древняя версия сервера (1.12.2 и ниже), замените на Statistic.PLAY_ONE_TICK
-        long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
-
-        // 1 секунда = 20 тиков. Переводим тики в миллисекунды.
-        return (ticks * 50L);
+        // Так как метод вызывается из асинхронного потока, Bukkit API может ругаться.
+        // Поэтому мы заставляем сервер безопасно прочитать статистику из основного потока.
+        try {
+            return Bukkit.getScheduler().callSyncMethod(this, () -> {
+                long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+                return ticks * 50L;
+            }).get(1, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     private void checkAndGrantRoles() {
@@ -89,13 +84,13 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private void checkAndGrantRolesForPlayer(Player player) {
+        if (!player.isOnline()) return;
+
         FileConfiguration config = getConfig();
         List<Map<?, ?>> roles = config.getMapList("roles");
 
         UUID uuid = player.getUniqueId();
         long totalPlaytime = getTotalPlaytime(player);
-
-        getLogger().info("Player " + player.getName() + " total server time: " + formatPlaytime(totalPlaytime));
 
         for (Map<?, ?> roleMap : roles) {
             String role = (String) roleMap.get("role");
@@ -119,16 +114,14 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener {
     }
 
     private void grantRole(UUID uuid, String role) {
-        User user = luckPerms.getUserManager().getUser(uuid);
-        if (user != null) {
+        // Загружаем пользователя асинхронно
+        luckPerms.getUserManager().modifyUser(uuid, user -> {
             Node node = Node.builder("group." + role).build();
             if (!user.getNodes().contains(node)) {
                 user.data().add(node);
-                // Сохраняем асинхронно, чтобы не фризить главный поток сервера
-                luckPerms.getUserManager().saveUser(user);
                 getLogger().info("Granted role " + role + " to player " + uuid);
             }
-        }
+        }); // Метод modifyUser сам автоматически и асинхронно сохраняет изменения в БД
     }
 
     public String formatPlaytime(long millis) {
