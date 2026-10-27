@@ -21,7 +21,7 @@ public class PlaytimeCommand implements CommandExecutor {
         // Если команду вводит консоль
         if (!(sender instanceof Player)) {
             if (args.length == 0) {
-                sender.sendMessage("Please specify a player name! Usage: /playtime <player>");
+                sender.sendMessage("§cПожалуйста, укажите имя игрока! Использование: /playtime <игрок>");
                 return true;
             }
 
@@ -35,14 +35,14 @@ public class PlaytimeCommand implements CommandExecutor {
         // Если игрок проверяет чужое время
         if (args.length > 0) {
             if (!player.hasPermission("playtimeroles.admin")) {
-                player.sendMessage("You don't have permission to view other players' time!");
+                player.sendMessage("§cУ вас нет прав для просмотра времени других игроков!");
                 return true;
             }
             checkAndSendPlaytime(player, args[0]);
         } else {
             // Если игрок проверяет своё собственное время
             long totalPlaytime = plugin.getTotalPlaytime(player);
-            player.sendMessage("Your play time: " + plugin.formatPlaytime(totalPlaytime));
+            player.sendMessage("§aВаше время в игре: §e" + plugin.formatPlaytime(totalPlaytime));
         }
 
         return true;
@@ -58,7 +58,7 @@ public class PlaytimeCommand implements CommandExecutor {
 
         if (targetOnline != null) {
             long totalPlaytime = plugin.getTotalPlaytime(targetOnline);
-            sender.sendMessage("Play time of " + targetOnline.getName() + ": " + plugin.formatPlaytime(totalPlaytime));
+            sender.sendMessage("§aВремя в игре игрока §e" + targetOnline.getName() + "§a: §e" + plugin.formatPlaytime(totalPlaytime));
         } else {
             // Если игрок оффлайн, Spigot всё равно позволяет прочитать его файлы статистики
             OfflinePlayer targetOffline = Bukkit.getOfflinePlayer(targetName);
@@ -67,9 +67,9 @@ public class PlaytimeCommand implements CommandExecutor {
                 long ticks = targetOffline.getStatistic(Statistic.PLAY_ONE_MINUTE);
                 long totalPlaytime = ticks * 50L; // Переводим тики оффлайн игрока в миллисекунды
 
-                sender.sendMessage("Play time of " + targetOffline.getName() + " (Offline): " + plugin.formatPlaytime(totalPlaytime));
+                sender.sendMessage("§aВремя в игре игрока §e" + targetOffline.getName() + " §7(Оффлайн)§a: §e" + plugin.formatPlaytime(totalPlaytime));
             } else {
-                sender.sendMessage("Player not found or has never played on this server!");
+                sender.sendMessage("§cИгрок не найден или никогда не играл на этом сервере!");
             }
         }
     }
