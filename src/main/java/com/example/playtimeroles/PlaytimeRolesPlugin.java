@@ -38,13 +38,10 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
 
         saveDefaultConfig();
 
-        // Регистрируем вашу старую команду /playtime
         getCommand("playtime").setExecutor(new PlaytimeCommand(this));
-
-        // Регистрируем новую админскую команду /playtimeroles
         getCommand("playtimeroles").setExecutor(this);
 
-        getLogger().info("PlaytimeRolesPlugin enabled! (Reload command added)");
+        getLogger().info("PlaytimeRolesPlugin enabled! (Join-check optimized)");
     }
 
     @Override
@@ -57,24 +54,20 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
         if (command.getName().equalsIgnoreCase("playtimeroles")) {
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
 
-                // Проверка: выполнять может только консоль, OP или игрок с правами админа
                 if (!sender.isOp() && !sender.hasPermission("playtimeroles.admin")) {
                     sender.sendMessage("§cУ вас нет прав для выполнения этой команды!");
                     return true;
                 }
 
-                // 1. Перезагружаем конфигурационный файл с диска
                 reloadConfig();
                 sender.sendMessage("§a[PlaytimeRoles] Конфигурация успешно перезагружена!");
-
-                // 2. Асинхронно перепроверяем роли для ВСЕХ, кто сейчас на сервере онлайн
                 sender.sendMessage("§e[PlaytimeRoles] Синхронизация ролей для онлайн-игроков...");
-                Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-                    for (Player player : Bukkit.getOnlinePlayers()) {
-                        checkAndGrantRolesForPlayer(player);
-                    }
-                    sender.sendMessage("§a[PlaytimeRoles] Синхронизация всех онлайн-игроков завершена!");
-                });
+
+                // Перепроверка игроков прямо из основного потока, без callSyncMethod
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    checkAndGrantRolesForPlayer(player);
+                }
+                sender.sendMessage("§a[PlaytimeRoles] Синхронизация всех онлайн-игроков завершена!");
 
                 return true;
             }
@@ -86,21 +79,17 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        // Запускаем проверку ролей с микро-задержкой в 5 тиков (0.25 сек) ПОСЛЕ того,
+        // как игрок полностью зашел и сетевой протокол стабилизировался.
         Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> checkAndGrantRolesForPlayer(player));
+        Bukkit.getScheduler().runTaskLater(this, () -> checkAndGrantRolesForPlayer(player), 5L);
     }
 
     public long getTotalPlaytime(Player player) {
         if (player == null) return 0L;
-
-        try {
-            return Bukkit.getScheduler().callSyncMethod(this, () -> {
-                long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
-                return ticks * 50L;
-            }).get(1, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            return 0L;
-        }
+        // Напрямую берем статистику, без создания блокирующих тасков callSyncMethod
+        long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+        return ticks * 50L;
     }
 
     private void checkAndGrantRolesForPlayer(Player player) {
@@ -112,16 +101,19 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
         UUID uuid = player.getUniqueId();
         long totalPlaytime = getTotalPlaytime(player);
 
-        for (Map<?, ?> roleMap : roles) {
-            String role = (String) roleMap.get("role");
-            long requiredTime = parseTime((String) roleMap.get("time"));
+        // Тяжелое сохранение в базу данных LuckPerms отправляем в фоновый поток
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            for (Map<?, ?> roleMap : roles) {
+                String role = (String) roleMap.get("role");
+                long requiredTime = parseTime((String) roleMap.get("time"));
 
-            if (totalPlaytime >= requiredTime) {
-                grantRole(uuid, role);
-            } else {
-                revokeRole(uuid, role);
+                if (totalPlaytime >= requiredTime) {
+                    grantRole(uuid, role);
+                } else {
+                    revokeRole(uuid, role);
+                }
             }
-        }
+        });
     }
 
     private long parseTime(String timeStr) {
@@ -140,7 +132,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
             Node node = Node.builder("group." + role).build();
             if (!user.getNodes().contains(node)) {
                 user.data().add(node);
-                getLogger().info("Granted role " + role + " to player " + uuid + " (Matches criteria)");
+                getLogger().info("Granted role " + role + " to player " + uuid);
             }
         });
     }
@@ -150,7 +142,7 @@ public class PlaytimeRolesPlugin extends JavaPlugin implements Listener, Command
             Node node = Node.builder("group." + role).build();
             if (user.getNodes().contains(node)) {
                 user.data().remove(node);
-                getLogger().info("Revoked role " + role + " from player " + uuid + " (Does not match criteria anymore)");
+                getLogger().info("Revoked role " + role + " from player " + uuid);
             }
         });
     }
